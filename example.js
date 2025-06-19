@@ -71,15 +71,6 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 ...additionalData
             };
 
-            // Debug: Log the request details
-            console.log(`🔍 DEBUG: Attempting API call (${attempt}/${retryAttempts})`);
-            console.log(`🔍 DEBUG: Endpoint: ${apiConfig.endpoint}`);
-            console.log(`🔍 DEBUG: Payload:`, JSON.stringify(payload, null, 2));
-            console.log(`🔍 DEBUG: Headers:`, JSON.stringify({
-                ...apiConfig.headers,
-                'Authorization': `Bearer ${apiConfig.apiKey}`
-            }, null, 2));
-
             const response = await fetch(apiConfig.endpoint, {
                 method: 'POST',
                 headers: {
@@ -90,13 +81,6 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 timeout: apiConfig.timeout
             });
 
-            // Debug: Log the response details
-            console.log(`🔍 DEBUG: Response status: ${response.status}`);
-            console.log(`🔍 DEBUG: Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
-            
-            const responseText = await response.text();
-            console.log(`🔍 DEBUG: Response body: ${responseText}`);
-
             if (response.ok) {
                 if (apiConfig.logSuccess) {
                     console.log(`✅ Message forwarded to API successfully. Status: ${response.status}`);
@@ -104,6 +88,7 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 return true;
             } else {
                 if (apiConfig.logErrors) {
+                    const responseText = await response.text();
                     console.error(`❌ API request failed. Status: ${response.status}, Response: ${responseText}`);
                 }
                 
@@ -118,7 +103,6 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
         } catch (error) {
             if (apiConfig.logErrors) {
                 console.error(`❌ Error forwarding message to API (attempt ${attempt}/${retryAttempts}): ${error.message}`);
-                console.error(`🔍 DEBUG: Full error:`, error);
             }
             
             // If it's the last attempt, return false
