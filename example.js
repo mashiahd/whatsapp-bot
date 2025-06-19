@@ -71,6 +71,15 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 ...additionalData
             };
 
+            // Debug: Log the request details
+            console.log(`🔍 DEBUG: Attempting API call (${attempt}/${retryAttempts})`);
+            console.log(`🔍 DEBUG: Endpoint: ${apiConfig.endpoint}`);
+            console.log(`🔍 DEBUG: Payload:`, JSON.stringify(payload, null, 2));
+            console.log(`🔍 DEBUG: Headers:`, JSON.stringify({
+                ...apiConfig.headers,
+                'Authorization': `Bearer ${apiConfig.apiKey}`
+            }, null, 2));
+
             const response = await fetch(apiConfig.endpoint, {
                 method: 'POST',
                 headers: {
@@ -81,6 +90,13 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 timeout: apiConfig.timeout
             });
 
+            // Debug: Log the response details
+            console.log(`🔍 DEBUG: Response status: ${response.status}`);
+            console.log(`🔍 DEBUG: Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+            
+            const responseText = await response.text();
+            console.log(`🔍 DEBUG: Response body: ${responseText}`);
+
             if (response.ok) {
                 if (apiConfig.logSuccess) {
                     console.log(`✅ Message forwarded to API successfully. Status: ${response.status}`);
@@ -88,7 +104,7 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 return true;
             } else {
                 if (apiConfig.logErrors) {
-                    console.error(`❌ API request failed. Status: ${response.status}, Response: ${await response.text()}`);
+                    console.error(`❌ API request failed. Status: ${response.status}, Response: ${responseText}`);
                 }
                 
                 // If it's the last attempt, return false
@@ -102,6 +118,7 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
         } catch (error) {
             if (apiConfig.logErrors) {
                 console.error(`❌ Error forwarding message to API (attempt ${attempt}/${retryAttempts}): ${error.message}`);
+                console.error(`🔍 DEBUG: Full error:`, error);
             }
             
             // If it's the last attempt, return false
@@ -115,6 +132,42 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
     }
     
     return false;
+}
+
+// Function to test API connection
+async function testAPIConnection() {
+    console.log('🧪 Testing API connection...');
+    
+    const testPayload = {
+        sender: 'test@c.us',
+        message: 'This is a test message from WhatsApp bot',
+        timestamp: new Date().toISOString(),
+        test: true
+    };
+
+    try {
+        const response = await fetch(apiConfig.endpoint, {
+            method: 'POST',
+            headers: {
+                ...apiConfig.headers,
+                'Authorization': `Bearer ${apiConfig.apiKey}`
+            },
+            body: JSON.stringify(testPayload),
+            timeout: apiConfig.timeout
+        });
+
+        console.log(`🧪 Test API Response Status: ${response.status}`);
+        const responseText = await response.text();
+        console.log(`🧪 Test API Response Body: ${responseText}`);
+        
+        if (response.ok) {
+            console.log('✅ API connection test successful!');
+        } else {
+            console.log('❌ API connection test failed!');
+        }
+    } catch (error) {
+        console.error('❌ API connection test error:', error.message);
+    }
 }
 
 // client initialize does not finish at ready now.
@@ -370,6 +423,10 @@ client.on('message', async msg => {
             My number: ${info.wid.user}
             Platform: ${info.platform}
         `);
+    } else if (msg.body === '!testapi') {
+        // Test API connection
+        msg.reply('Testing API connection... Check the console for results.');
+        await testAPIConnection();
     } else if (msg.body === '!mediainfo' && msg.hasMedia) {
         const attachmentData = await msg.downloadMedia();
         msg.reply(`
