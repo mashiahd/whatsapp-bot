@@ -249,6 +249,16 @@ client.on('ready', async () => {
     } else {
         console.log('📡 API forwarding disabled');
     }
+    
+    // Log debug status
+    console.log(`🔍 Debug mode: ${apiConfig.debug ? 'ENABLED' : 'DISABLED'}`);
+    if (apiConfig.debug) {
+        console.log('🔍 Debug features:');
+        console.log('  - Detailed message logging');
+        console.log('  - API request/response logging');
+        console.log('  - Error details and stack traces');
+        console.log('  - Use !debug to toggle, !debugstatus to check');
+    }
 
     client.pupPage.on('pageerror', function(err) {
         console.log('Page error: ' + err.toString());
@@ -488,6 +498,18 @@ client.on('message', async msg => {
         // Show debug status
         const status = apiConfig.debug ? 'enabled' : 'disabled';
         msg.reply(`🔍 Debug mode is currently ${status}`);
+    } else if (msg.body === '!clearcache') {
+        // Clear WhatsApp cache
+        msg.reply('🗑️ Clearing WhatsApp cache... This may help with binding issues.');
+        console.log(`🗑️ Cache clear requested by user ${msg.from}`);
+        try {
+            // This will force a fresh session on next restart
+            await client.destroy();
+            msg.reply('✅ Cache cleared. Please restart the bot service.');
+        } catch (error) {
+            console.error('❌ Error clearing cache:', error.message);
+            msg.reply('❌ Error clearing cache. Check console for details.');
+        }
     } else if (msg.body === '!mediainfo' && msg.hasMedia) {
         const attachmentData = await msg.downloadMedia();
         msg.reply(`
@@ -1054,7 +1076,46 @@ server.listen(HTTP_PORT, () => {
     console.log(`🌐 HTTP server running on port ${HTTP_PORT}`);
     console.log(`📤 Send messages via POST http://localhost:${HTTP_PORT}/send`);
     console.log(`📊 Check status via GET http://localhost:${HTTP_PORT}/status`);
+    
+    // Log debug status on startup
+    console.log(`🔍 Debug mode: ${apiConfig.debug ? 'ENABLED' : 'DISABLED'}`);
+    if (apiConfig.debug) {
+        console.log('🔍 Debug features active:');
+        console.log('  - Detailed message logging');
+        console.log('  - API request/response logging');
+        console.log('  - Error details and stack traces');
+        console.log('  - Use !debug to toggle, !debugstatus to check');
+    }
 });
 
-// Initialize WhatsApp client
-client.initialize();
+// Initialize WhatsApp client with error handling
+async function initializeWhatsApp() {
+    try {
+        console.log('🚀 Initializing WhatsApp client...');
+        await client.initialize();
+    } catch (error) {
+        console.error('❌ Error initializing WhatsApp client:', error.message);
+        
+        // Handle specific Puppeteer binding error
+        if (error.message.includes('already exists')) {
+            console.log('🔄 Detected Puppeteer binding conflict. Attempting to restart...');
+            
+            // Wait a bit and try again
+            setTimeout(async () => {
+                try {
+                    console.log('🔄 Retrying WhatsApp client initialization...');
+                    await client.initialize();
+                } catch (retryError) {
+                    console.error('❌ Retry failed:', retryError.message);
+                    console.log('💡 Try restarting the service or clearing the cache');
+                    process.exit(1);
+                }
+            }, 5000);
+        } else {
+            console.error('❌ Fatal error during initialization');
+            process.exit(1);
+        }
+    }
+}
+
+initializeWhatsApp();
