@@ -79,3 +79,4 @@ typings/
 .idea
 .vscode
 installation.sh
+api-config.js
