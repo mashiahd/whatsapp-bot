@@ -82,7 +82,7 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
             });
 
             if (response.ok) {
-                if (apiConfig.logSuccess) {
+                if (apiConfig.debug && apiConfig.logSuccess) {
                     console.log(`✅ Message forwarded to API successfully. Status: ${response.status}`);
                 }
                 return true;
@@ -224,7 +224,15 @@ client.on('ready', async () => {
 });
 
 client.on('message', async msg => {
-    console.log('MESSAGE RECEIVED', msg);
+    // Debug mode: Show only essential message info
+    if (apiConfig.debug) {
+        console.log('MESSAGE RECEIVED', {
+            type: msg.type,
+            from: msg.from,
+            to: msg.to,
+            body: msg.body
+        });
+    }
 
     // Extract sender information
     const sender = msg.from;
@@ -244,10 +252,10 @@ client.on('message', async msg => {
 
     // Check if message should be forwarded
     if (shouldForwardMessage(sender, message, additionalData)) {
-        console.log(`📤 Forwarding message from ${sender}: "${message}"`);
+        if (apiConfig.debug) {
+            console.log(`Forwarding message from ${sender}: "${message}"`);
+        }
         await forwardMessageToAPI(sender, message, additionalData);
-    } else {
-        console.log(`⏭️ Skipping message from ${sender} (filtered out)`);
     }
 
     // Original bot commands (optional - you can remove these if you only want forwarding)
