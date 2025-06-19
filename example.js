@@ -1,6 +1,12 @@
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 const fetch = require('node-fetch');
 const apiConfig = require('./api-config');
+const http = require('http');
+const url = require('url');
+
+// HTTP Server Configuration
+const HTTP_PORT = process.env.HTTP_PORT || 3000;
+const HTTP_AUTH_TOKEN = process.env.WHATSAPP_SEND_AUTH_TOKEN || 'your-secret-token-here';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -885,3 +891,107 @@ client.on('vote_update', (vote) => {
     /** The vote that was affected: */
     console.log(vote);
 });
+
+// HTTP Server for sending messages via API
+const server = http.createServer(async (req, res) => {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+
+    // Check authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${HTTP_AUTH_TOKEN}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+    }
+
+    const parsedUrl = url.parse(req.url, true);
+    const path = parsedUrl.pathname;
+
+    if (req.method === 'POST' && path === '/send') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { to, message, type = 'text' } = data;
+
+                if (!to || !message) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Missing required fields: to, message' }));
+                    return;
+                }
+
+                // Format phone number
+                let phoneNumber = to;
+                if (!phoneNumber.includes('@c.us')) {
+                    phoneNumber = `${phoneNumber}@c.us`;
+                }
+
+                let result;
+                switch (type) {
+                    case 'text':
+                        result = await client.sendMessage(phoneNumber, message);
+                        break;
+                    case 'location':
+                        const { latitude, longitude, name, address } = data;
+                        if (!latitude || !longitude) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Location requires latitude and longitude' }));
+                            return;
+                        }
+                        result = await client.sendMessage(phoneNumber, new Location(latitude, longitude, name, address));
+                        break;
+                    default:
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Unsupported message type' }));
+                        return;
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: true, 
+                    messageId: result.id._serialized,
+                    timestamp: result.timestamp 
+                }));
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to send message', details: error.message }));
+            }
+        });
+    } else if (req.method === 'GET' && path === '/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            status: 'running',
+            whatsapp: client.info ? 'connected' : 'connecting',
+            timestamp: new Date().toISOString()
+        }));
+    } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+    }
+});
+
+// Start HTTP server
+server.listen(HTTP_PORT, () => {
+    console.log(`🌐 HTTP server running on port ${HTTP_PORT}`);
+    console.log(`📤 Send messages via POST http://localhost:${HTTP_PORT}/send`);
+    console.log(`📊 Check status via GET http://localhost:${HTTP_PORT}/status`);
+});
+
+// Initialize WhatsApp client
+client.initialize();

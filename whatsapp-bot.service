@@ -11,6 +11,8 @@ ExecStart=/usr/bin/node example.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
+Environment=WHATSAPP_SEND_AUTH_TOKEN=your-super-secure-token-here
+Environment=HTTP_PORT=3000
 
 # Security settings
 NoNewPrivileges=false
@@ -25,4 +27,4 @@ StandardError=journal
 SyslogIdentifier=whatsapp-bot
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target
