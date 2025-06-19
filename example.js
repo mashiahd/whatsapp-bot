@@ -1,13 +1,121 @@
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
+const fetch = require('node-fetch');
+const apiConfig = require('./api-config');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     // proxyAuthentication: { username: 'username', password: 'password' },
     puppeteer: { 
         // args: ['--proxy-server=proxy-server-that-requires-authentication.example.com'],
-        headless: false,
+        headless: true, // Changed to true for server deployment
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
     }
 });
+
+// Function to check if message should be forwarded based on filters
+function shouldForwardMessage(sender, message, additionalData) {
+    const { filters } = apiConfig;
+    
+    // Skip if API forwarding is disabled
+    if (!apiConfig.enabled) {
+        return false;
+    }
+    
+    // Skip own messages if configured
+    if (filters.skipOwnMessages && additionalData.isFromMe) {
+        return false;
+    }
+    
+    // Skip group messages if configured
+    if (filters.skipGroupMessages && additionalData.chatType === 'group') {
+        return false;
+    }
+    
+    // Check allowed senders
+    if (filters.allowedSenders.length > 0 && !filters.allowedSenders.includes(sender)) {
+        return false;
+    }
+    
+    // Check required keywords
+    if (filters.requiredKeywords.length > 0) {
+        const hasKeyword = filters.requiredKeywords.some(keyword => 
+            message.toLowerCase().includes(keyword.toLowerCase())
+        );
+        if (!hasKeyword) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Function to send message to your API with retry logic
+async function forwardMessageToAPI(sender, message, additionalData = {}) {
+    const { retryAttempts, retryDelay } = apiConfig;
+    
+    for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+        try {
+            const payload = {
+                sender: sender,
+                message: message,
+                timestamp: new Date().toISOString(),
+                ...additionalData
+            };
+
+            const response = await fetch(apiConfig.endpoint, {
+                method: 'POST',
+                headers: {
+                    ...apiConfig.headers,
+                    'Authorization': `Bearer ${apiConfig.apiKey}`
+                },
+                body: JSON.stringify(payload),
+                timeout: apiConfig.timeout
+            });
+
+            if (response.ok) {
+                if (apiConfig.logSuccess) {
+                    console.log(`✅ Message forwarded to API successfully. Status: ${response.status}`);
+                }
+                return true;
+            } else {
+                if (apiConfig.logErrors) {
+                    console.error(`❌ API request failed. Status: ${response.status}, Response: ${await response.text()}`);
+                }
+                
+                // If it's the last attempt, return false
+                if (attempt === retryAttempts) {
+                    return false;
+                }
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+        } catch (error) {
+            if (apiConfig.logErrors) {
+                console.error(`❌ Error forwarding message to API (attempt ${attempt}/${retryAttempts}): ${error.message}`);
+            }
+            
+            // If it's the last attempt, return false
+            if (attempt === retryAttempts) {
+                return false;
+            }
+            
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+    }
+    
+    return false;
+}
 
 // client initialize does not finish at ready now.
 client.initialize();
@@ -18,9 +126,26 @@ client.on('loading_screen', (percent, message) => {
 
 // Pairing code only needs to be requested once
 let pairingCodeRequested = false;
+let qrCodeShown = false;
+
 client.on('qr', async (qr) => {
     // NOTE: This event will not be fired if a session is specified.
-    console.log('QR RECEIVED', qr);
+    if (!qrCodeShown) {
+        console.log('==========================================');
+        console.log('🔐 WHATSAPP QR CODE - SCAN WITH YOUR PHONE');
+        console.log('==========================================');
+        console.log('QR CODE DATA:');
+        console.log(qr);
+        console.log('==========================================');
+        console.log('📱 Instructions:');
+        console.log('Convert code to QR - https://www.qr-code-generator.com/');
+        console.log('1. Open WhatsApp on your phone');
+        console.log('2. Go to Settings > Linked Devices > Link a Device');
+        console.log('3. Scan the QR code above');
+        console.log('4. Wait for authentication...');
+        console.log('==========================================');
+        qrCodeShown = true;
+    }
 
     // paiuting code example
     const pairingCodeEnabled = false;
@@ -44,6 +169,13 @@ client.on('ready', async () => {
     console.log('READY');
     const debugWWebVersion = await client.getWWebVersion();
     console.log(`WWebVersion = ${debugWWebVersion}`);
+    
+    // Log API configuration status
+    if (apiConfig.enabled) {
+        console.log(`📡 API forwarding enabled to: ${apiConfig.endpoint}`);
+    } else {
+        console.log('📡 API forwarding disabled');
+    }
 
     client.pupPage.on('pageerror', function(err) {
         console.log('Page error: ' + err.toString());
@@ -57,6 +189,31 @@ client.on('ready', async () => {
 client.on('message', async msg => {
     console.log('MESSAGE RECEIVED', msg);
 
+    // Extract sender information
+    const sender = msg.from;
+    const message = msg.body;
+    const chat = await msg.getChat();
+    
+    // Prepare additional data for API
+    const additionalData = {
+        messageId: msg.id._serialized,
+        chatType: chat.isGroup ? 'group' : 'private',
+        chatName: chat.name || 'Unknown',
+        messageType: msg.type,
+        hasMedia: msg.hasMedia,
+        timestamp: msg.timestamp,
+        isFromMe: msg.fromMe
+    };
+
+    // Check if message should be forwarded
+    if (shouldForwardMessage(sender, message, additionalData)) {
+        console.log(`📤 Forwarding message from ${sender}: "${message}"`);
+        await forwardMessageToAPI(sender, message, additionalData);
+    } else {
+        console.log(`⏭️ Skipping message from ${sender} (filtered out)`);
+    }
+
+    // Original bot commands (optional - you can remove these if you only want forwarding)
     if (msg.body === '!ping reply') {
         // Send a new message as a reply to the current one
         msg.reply('pong');
@@ -158,27 +315,28 @@ client.on('message', async msg => {
          *   participants: {
          *     'botNumber@c.us': {
          *       statusCode: 200,
-         *       message: 'The participant was added successfully',
-         *       isGroupCreator: true,
-         *       isInviteV4Sent: false
-         *     },
-         *     'number1@c.us': {
-         *       statusCode: 200,
-         *       message: 'The participant was added successfully',
-         *       isGroupCreator: false,
-         *       isInviteV4Sent: false
-         *     },
-         *     'number2@c.us': {
-         *       statusCode: 403,
-         *       message: 'The participant can be added by sending private invitation only',
-         *       isGroupCreator: false,
-         *       isInviteV4Sent: true
-         *     },
-         *     'number3@c.us': {
-         *       statusCode: 404,
-         *       message: 'The phone number is not registered on WhatsApp',
-         *       isGroupCreator: false,
-         *       isInviteV4Sent: false
+         *         message: 'The participant was added successfully',
+         *         isGroupCreator: true,
+         *         isInviteV4Sent: false
+         *       },
+         *       'number1@c.us': {
+         *         statusCode: 200,
+         *         message: 'The participant was added successfully',
+         *         isGroupCreator: false,
+         *         isInviteV4Sent: false
+         *       },
+         *       'number2@c.us': {
+         *         statusCode: 403,
+         *         message: 'The participant can be added by sending private invitation only',
+         *         isGroupCreator: false,
+         *         isInviteV4Sent: true
+         *       },
+         *       'number3@c.us': {
+         *         statusCode: 404,
+         *         message: 'The phone number is not registered on WhatsApp',
+         *         isGroupCreator: false,
+         *         isInviteV4Sent: false
+         *       }
          *     }
          *   }
          * }
