@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 Group=app_whatsapp
-WorkingDirectory=/webapps/whatsapp-bot/whatsapp-web.js
+WorkingDirectory=/webapps/whatsapp-bot
 ExecStart=/usr/bin/node example.js
 Restart=always
 RestartSec=10
@@ -19,7 +19,7 @@ NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/webapps/whatsapp-bot/whatsapp-web.js
+ReadWritePaths=/webapps/whatsapp-bot
 
 # Logging
 StandardOutput=journal
