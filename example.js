@@ -191,10 +191,10 @@ async function testAPIConnection() {
 }
 
 // client initialize does not finish at ready now.
-client.initialize();
+// client.initialize(); // REMOVED - now handled in initializeWhatsApp()
 
 client.on('loading_screen', (percent, message) => {
-    console.log('LOADING SCREEN', percent, message);
+    console.log(`📱 Loading: ${percent}% - ${message}`);
 });
 
 // Pairing code only needs to be requested once
@@ -202,6 +202,7 @@ let pairingCodeRequested = false;
 let qrCodeShown = false;
 
 client.on('qr', async (qr) => {
+    console.log('🔐 QR Code received - waiting for scan...');
     // NOTE: This event will not be fired if a session is specified.
     if (!qrCodeShown) {
         console.log('==========================================');
@@ -230,18 +231,17 @@ client.on('qr', async (qr) => {
 });
 
 client.on('authenticated', () => {
-    console.log('AUTHENTICATED');
+    console.log('✅ AUTHENTICATED - WhatsApp session restored or QR scanned');
 });
 
 client.on('auth_failure', msg => {
-    // Fired if session restore was unsuccessful
-    console.error('AUTHENTICATION FAILURE', msg);
+    console.error('❌ AUTHENTICATION FAILURE:', msg);
 });
 
 client.on('ready', async () => {
-    console.log('READY');
+    console.log('✅ READY - WhatsApp client is fully connected');
     const debugWWebVersion = await client.getWWebVersion();
-    console.log(`WWebVersion = ${debugWWebVersion}`);
+    console.log(`📱 WWebVersion = ${debugWWebVersion}`);
     
     // Log API configuration status
     if (apiConfig.enabled) {
@@ -261,12 +261,16 @@ client.on('ready', async () => {
     }
 
     client.pupPage.on('pageerror', function(err) {
-        console.log('Page error: ' + err.toString());
+        console.log('❌ Page error: ' + err.toString());
     });
     client.pupPage.on('error', function(err) {
-        console.log('Page error: ' + err.toString());
+        console.log('❌ Page error: ' + err.toString());
     });
     
+});
+
+client.on('disconnected', (reason) => {
+    console.log('❌ Client was logged out:', reason);
 });
 
 client.on('message', async msg => {
@@ -889,10 +893,6 @@ client.on('call', async (call) => {
     await client.sendMessage(call.from, `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`);
 });
 
-client.on('disconnected', (reason) => {
-    console.log('Client was logged out', reason);
-});
-
 client.on('contact_changed', async (message, oldId, newId, isContact) => {
     /** The time the event occurred. */
     const eventTime = (new Date(message.timestamp * 1000)).toLocaleString();
@@ -1092,9 +1092,15 @@ server.listen(HTTP_PORT, () => {
 async function initializeWhatsApp() {
     try {
         console.log('🚀 Initializing WhatsApp client...');
+        console.log('📱 Setting up Puppeteer with headless mode...');
+        
+        console.log('🔄 Starting client initialization...');
         await client.initialize();
+        console.log('✅ Client initialization completed');
+        
     } catch (error) {
         console.error('❌ Error initializing WhatsApp client:', error.message);
+        console.error('📚 Full error:', error);
         
         // Handle specific Puppeteer binding error
         if (error.message.includes('already exists')) {
