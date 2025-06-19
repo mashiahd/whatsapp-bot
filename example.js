@@ -77,6 +77,16 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 ...additionalData
             };
 
+            // Debug: Show detailed payload information
+            if (apiConfig.debug) {
+                console.log('🔍 DEBUG: Forwarding message to API');
+                console.log('📤 Payload:', JSON.stringify(payload, null, 2));
+                console.log('🌐 Endpoint:', apiConfig.endpoint);
+                console.log('🔑 API Key:', apiConfig.apiKey ? '***' + apiConfig.apiKey.slice(-4) : 'None');
+                console.log('⏱️  Timeout:', apiConfig.timeout + 'ms');
+                console.log('🔄 Attempt:', `${attempt}/${retryAttempts}`);
+            }
+
             const response = await fetch(apiConfig.endpoint, {
                 method: 'POST',
                 headers: {
@@ -88,13 +98,22 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
             });
 
             if (response.ok) {
-                if (apiConfig.debug && apiConfig.logSuccess) {
+                if (apiConfig.debug) {
+                    console.log(`✅ DEBUG: API request successful`);
+                    console.log(`📊 Status: ${response.status} ${response.statusText}`);
+                    console.log(`📋 Headers:`, Object.fromEntries(response.headers.entries()));
+                } else if (apiConfig.logSuccess) {
                     console.log(`✅ Message forwarded to API successfully. Status: ${response.status}`);
                 }
                 return true;
             } else {
-                if (apiConfig.logErrors) {
-                    const responseText = await response.text();
+                const responseText = await response.text();
+                if (apiConfig.debug) {
+                    console.log(`❌ DEBUG: API request failed`);
+                    console.log(`📊 Status: ${response.status} ${response.statusText}`);
+                    console.log(`📋 Response Headers:`, Object.fromEntries(response.headers.entries()));
+                    console.log(`📄 Response Body: ${responseText}`);
+                } else if (apiConfig.logErrors) {
                     console.error(`❌ API request failed. Status: ${response.status}, Response: ${responseText}`);
                 }
                 
@@ -104,10 +123,18 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
                 }
                 
                 // Wait before retrying
+                if (apiConfig.debug) {
+                    console.log(`⏳ DEBUG: Waiting ${retryDelay}ms before retry...`);
+                }
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
             }
         } catch (error) {
-            if (apiConfig.logErrors) {
+            if (apiConfig.debug) {
+                console.log(`❌ DEBUG: Network/connection error`);
+                console.log(`🔍 Error Type: ${error.name}`);
+                console.log(`📝 Error Message: ${error.message}`);
+                console.log(`📚 Error Stack: ${error.stack}`);
+            } else if (apiConfig.logErrors) {
                 console.error(`❌ Error forwarding message to API (attempt ${attempt}/${retryAttempts}): ${error.message}`);
             }
             
@@ -117,6 +144,9 @@ async function forwardMessageToAPI(sender, message, additionalData = {}) {
             }
             
             // Wait before retrying
+            if (apiConfig.debug) {
+                console.log(`⏳ DEBUG: Waiting ${retryDelay}ms before retry...`);
+            }
             await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
     }
@@ -230,13 +260,33 @@ client.on('ready', async () => {
 });
 
 client.on('message', async msg => {
-    // Debug mode: Show only essential message info
+    // Debug mode: Show detailed message info
     if (apiConfig.debug) {
-        console.log('MESSAGE RECEIVED', {
+        console.log('📨 MESSAGE RECEIVED');
+        console.log('📋 Basic Info:', {
             type: msg.type,
             from: msg.from,
             to: msg.to,
-            body: msg.body
+            body: msg.body,
+            timestamp: new Date(msg.timestamp * 1000).toISOString(),
+            messageId: msg.id._serialized
+        });
+        console.log('🔍 Full Message Details:', {
+            hasMedia: msg.hasMedia,
+            isFromMe: msg.fromMe,
+            hasQuotedMsg: msg.hasQuotedMsg,
+            hasReaction: msg.hasReaction,
+            isForwarded: msg.isForwarded,
+            isStatus: msg.isStatus,
+            isStarred: msg.isStarred,
+            deviceType: msg.deviceType,
+            broadcast: msg.broadcast,
+            duration: msg.duration,
+            location: msg.location,
+            vCards: msg.vCards,
+            mentionedIds: msg.mentionedIds,
+            groupMentions: msg.groupMentions,
+            links: msg.links
         });
     }
 
@@ -259,9 +309,12 @@ client.on('message', async msg => {
     // Check if message should be forwarded
     if (shouldForwardMessage(sender, message, additionalData)) {
         if (apiConfig.debug) {
-            console.log(`Forwarding message from ${sender}: "${message}"`);
+            console.log(`📤 Forwarding message from ${sender}: "${message}"`);
+            console.log(`📊 Additional Data:`, JSON.stringify(additionalData, null, 2));
         }
         await forwardMessageToAPI(sender, message, additionalData);
+    } else if (apiConfig.debug) {
+        console.log(`⏭️  Skipping message from ${sender} (filtered out)`);
     }
 
     // Original bot commands (optional - you can remove these if you only want forwarding)
@@ -425,6 +478,16 @@ client.on('message', async msg => {
         // Test API connection
         msg.reply('Testing API connection... Check the console for results.');
         await testAPIConnection();
+    } else if (msg.body === '!debug') {
+        // Toggle debug mode
+        apiConfig.debug = !apiConfig.debug;
+        const status = apiConfig.debug ? 'enabled' : 'disabled';
+        msg.reply(`🔍 Debug mode ${status}! Check console for detailed logs.`);
+        console.log(`🔍 Debug mode ${status} by user ${msg.from}`);
+    } else if (msg.body === '!debugstatus') {
+        // Show debug status
+        const status = apiConfig.debug ? 'enabled' : 'disabled';
+        msg.reply(`🔍 Debug mode is currently ${status}`);
     } else if (msg.body === '!mediainfo' && msg.hasMedia) {
         const attachmentData = await msg.downloadMedia();
         msg.reply(`
