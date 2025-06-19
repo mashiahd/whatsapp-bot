@@ -1,0 +1,28 @@
+[Unit]
+Description=WhatsApp Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=app_whatsapp
+WorkingDirectory=/webapps/whatsapp-bot/whatsapp-web.js
+ExecStart=/usr/bin/node example.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/webapps/whatsapp-bot/whatsapp-web.js
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=whatsapp-bot
+
+[Install]
+WantedBy=multi-user.target 
