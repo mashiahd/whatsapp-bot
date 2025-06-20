@@ -1021,7 +1021,7 @@ const server = http.createServer(async (req, res) => {
 
                 // Format phone number
                 let phoneNumber = to;
-                if (!phoneNumber.includes('@c.us')) {
+                if (!phoneNumber.includes('@c.us') && !phoneNumber.includes('@g.us')) {
                     phoneNumber = `${phoneNumber}@c.us`;
                 }
 
