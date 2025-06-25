@@ -360,13 +360,13 @@ client.on('message_create', async (msg) => {
     // Bot commands removed - no user interaction allowed
 });
 
-client.on('message_ciphertext', (msg) => {
+// client.on('message_ciphertext', (msg) => {
     // Receiving new incoming messages that have been encrypted
     // msg.type === 'ciphertext'
-    msg.body = 'Waiting for this message. Check your phone.';
+    // msg.body = 'Waiting for this message. Check your phone.'; // COMMENTED: Bot-like behavior disabled
     
     // do stuff here
-});
+// });
 
 client.on('message_revoke_everyone', async (after, before) => {
     // Fired whenever a message is deleted by anyone (including you)
@@ -397,17 +397,17 @@ client.on('message_ack', (msg, ack) => {
     }
 });
 
-client.on('group_join', (notification) => {
+// client.on('group_join', (notification) => {
     // User has joined or been added to the group.
-    console.log('join', notification);
-    notification.reply('User joined.');
-});
+    // console.log('join', notification);
+    // notification.reply('User joined.'); // COMMENTED: Bot-like behavior disabled
+// });
 
-client.on('group_leave', (notification) => {
+// client.on('group_leave', (notification) => {
     // User has left or been kicked from the group.
-    console.log('leave', notification);
-    notification.reply('User left.');
-});
+    // console.log('leave', notification);
+    // notification.reply('User left.'); // COMMENTED: Bot-like behavior disabled
+// });
 
 client.on('group_update', (notification) => {
     // Group picture, subject or description has been updated.
@@ -419,13 +419,13 @@ client.on('change_state', state => {
 });
 
 // Change to false if you don't want to reject incoming calls
-let rejectCalls = true;
+// let rejectCalls = true;
 
-client.on('call', async (call) => {
-    console.log('Call received, rejecting. GOTO Line 261 to disable', call);
-    if (rejectCalls) await call.reject();
-    await client.sendMessage(call.from, `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`);
-});
+// client.on('call', async (call) => {
+    // console.log('Call received, rejecting. GOTO Line 261 to disable', call);
+    // if (rejectCalls) await call.reject();
+    // await client.sendMessage(call.from, `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`); // COMMENTED: Bot-like behavior disabled
+// });
 
 client.on('contact_changed', async (message, oldId, newId, isContact) => {
     /** The time the event occurred. */
@@ -476,7 +476,7 @@ client.on('group_admin_changed', (notification) => {
         console.log(`You were demoted by ${notification.author}`);
 });
 
-client.on('group_membership_request', async (notification) => {
+// client.on('group_membership_request', async (notification) => {
     /**
      * The example of the {@link notification} output:
      * {
@@ -496,11 +496,11 @@ client.on('group_membership_request', async (notification) => {
      * }
      *
      */
-    console.log(notification);
+    // console.log(notification);
     /** You can approve or reject the newly appeared membership request: */
-    await client.approveGroupMembershipRequestss(notification.chatId, notification.author);
-    await client.rejectGroupMembershipRequests(notification.chatId, notification.author);
-});
+    // await client.approveGroupMembershipRequestss(notification.chatId, notification.author); // COMMENTED: Bot-like behavior disabled
+    // await client.rejectGroupMembershipRequests(notification.chatId, notification.author); // COMMENTED: Bot-like behavior disabled
+// });
 
 client.on('message_reaction', async (reaction) => {
     console.log('REACTION RECEIVED', reaction);
